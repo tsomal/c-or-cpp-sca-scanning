@@ -29,7 +29,7 @@
       "type": "library",
       "name": "OpenSSL",
       "version": "1.0.2u-1~deb9u1",
-      "purl": "pkg:deb/debian/openssl@1.0.2u-1~deb9u1",
+      "purl": "pkg:deb/debian/openssl@1.0.2u-1~deb9u1"
     }
   ]
 }
