@@ -127,71 +127,53 @@ jobs:
           path: third-party-vulnerabilities.csv
           if-no-files-found: warn
       
-      - name: Create or update vulnerability issue
-        if: steps.osv.outcome == 'success'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('osv-results.json', 'utf8'));
-            const rows = [];
-            const seen = new Set();
-
-            for (const result of (data.results || [])) {
-              for (const item of (result.packages || [])) {
-                const pkg = item.package || {};
-                const name = pkg.name || 'unknown';
-                const version = pkg.version || 'unknown';
-                const ecosystem = pkg.ecosystem ? ` (${pkg.ecosystem})` : '';
-                for (const vuln of (item.vulnerabilities || [])) {
-                  const ids = [...new Set([vuln.id, ...(vuln.aliases || [])].filter(Boolean))];
-                  const key = `${name}@${version}:${ids.join(',')}`;
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  rows.push({
-                    dependency: `${name}@${version}${ecosystem}`,
-                    ids: ids.join(', '),
-                    summary: (vuln.summary || vuln.details || 'No advisory summary provided').split('\n')[0],
-                  });
-                }
-              }
-            }
-
-            if (rows.length === 0) {
-              core.info('No OSV findings; no GitHub issue created or updated.');
-              return;
-            }
-
-            const escapeCell = value => String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
-            const table = [
-              '| Dependency | Vulnerability | Summary |',
-              '| --- | --- | --- |',
-              ...rows.map(row => `| ${escapeCell(row.dependency)} | ${escapeCell(row.ids)} | ${escapeCell(row.summary)} |`),
-            ].join('\n');
+                  const escapeCell = value =>
+              String(value).replaceAll('|', '\\|').replaceAll('\n', ' ');
 
             const title = 'OSV: third-party dependency vulnerabilities detected';
-            const body = [
+            const prefix = [
               'OSV-Scanner reported vulnerabilities in the declared third-party SBOM.',
               '',
-              '> Review each advisory and verify that the SBOM coordinates and versions represent the dependencies actually used. This scan checks the declared SBOM, not whether the vulnerable code is reachable.',
+              '> This issue shows findings that fit within GitHub’s issue-body limit. See the workflow artifact for the full CSV report.',
               '',
-              table,
+              '| Dependency | Vulnerability | Summary |',
+              '| --- | --- | --- |',
+            ].join('\n');
+
+            const footer = [
               '',
               `Detected by [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
             ].join('\n');
 
-            const { owner, repo } = context.repo;
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'open', per_page: 100,
-            });
-            const existing = issues.find(issue => !issue.pull_request && issue.title === title);
+            const maxBodyBytes = 60000;
+            const included = [];
+            let omitted = 0;
 
-            if (existing) {
-              await github.rest.issues.update({
-                owner, repo, issue_number: existing.number, body,
-              });
-              core.info(`Updated existing vulnerability issue #${existing.number}.`);
-            } else {
-              const created = await github.rest.issues.create({ owner, repo, title, body });
-              core.info(`Created issue #${created.data.number}.`);
+            for (const row of rows) {
+              // Bound individual cells so one exceptionally long advisory can't consume the issue.
+              const line = `| ${escapeCell(row.dependency).slice(0, 300)} | ${escapeCell(row.ids).slice(0, 500)} | ${escapeCell(row.summary).slice(0, 500)} |`;
+              const candidate = [
+                prefix,
+                ...included,
+                line,
+                '',
+                '_Additional findings omitted from this issue; see the workflow CSV artifact._',
+                footer,
+              ].join('\n');
+
+              if (Buffer.byteLength(candidate, 'utf8') > maxBodyBytes) {
+                omitted = rows.length - included.length;
+                break;
+              }
+              included.push(line);
+            }
+
+            const omittedLine = omitted
+              ? `\n\n_${omitted} additional finding(s) omitted; see the workflow CSV artifact._`
+              : '';
+
+            const body = `${prefix}\n${included.join('\n')}${omittedLine}${footer}`;
+
+            if (Buffer.byteLength(body, 'utf8') > 65536) {
+              throw new Error('Generated issue body still exceeds GitHub’s 65,536-byte limit.');
             }
