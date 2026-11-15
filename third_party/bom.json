@@ -1,0 +1,36 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:75a10ae3-f0b0-4a80-9ed2-0fc44c08d0a1",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "c-or-cpp-sca-scanning",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "zlib",
+      "version": "1.2.11",
+      "purl": "pkg:generic/zlib@1.2.11",
+      "cpe": "cpe:2.3:a:zlib:zlib:1.2.11:*:*:*:*:*:*:*"
+    },
+    {
+      "type": "library",
+      "name": "libpng",
+      "version": "1.6.37",
+      "purl": "pkg:generic/libpng@1.6.37",
+      "cpe": "cpe:2.3:a:libpng:libpng:1.6.37:*:*:*:*:*:*:*"
+    },
+    {
+      "type": "library",
+      "name": "OpenSSL",
+      "version": "1.0.2u",
+      "purl": "pkg:generic/openssl@1.0.2u",
+      "cpe": "cpe:2.3:a:openssl:openssl:1.0.2u:*:*:*:*:*:*:*"
+    }
+  ]
+}
