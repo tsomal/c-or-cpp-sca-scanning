@@ -1,0 +1,30 @@
+name: List third-party dependencies
+
+on:
+  push:
+    paths:
+      - "third_party/**"
+      - ".github/workflows/syft.yml"
+  pull_request:
+    paths:
+      - "third_party/**"
+      - ".github/workflows/syft.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Print dependencies found under third_party
+        run: syft dir:./third_party -o table
