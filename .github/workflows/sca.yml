@@ -1,0 +1,37 @@
+name: SCA scan
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-sca:
+    name: Scan dependency inventory
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Scan repository filesystem
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+          format: table
+
+      - name: Scan CycloneDX SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: sbom
+          scan-ref: third_party/bom.json
+          scanners: vuln
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: '0'
+          format: table
