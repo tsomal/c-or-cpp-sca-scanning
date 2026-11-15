@@ -2,7 +2,7 @@ name: SCA scan
 
 on:
   push:
-  pull_request:
+  # pull_request:
   workflow_dispatch:
 
 permissions:
