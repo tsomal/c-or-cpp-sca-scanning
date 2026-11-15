@@ -1,4 +1,4 @@
-name: List third-party dependencies
+name: List third-party dependencies and check vulnerabilities
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  list-dependencies:
+  dependency-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -25,10 +25,9 @@ jobs:
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
             | sh -s -- -b /usr/local/bin
-      
+
       - name: Print declared dependency inventory
-        run: |
-          jq -r '.components[] | "\(.name) \(.version)"' third_party/bom.json
+        run: jq -r '.components[] | "\(.name) \(.version)"' third_party/bom.json
 
       - name: Install OSV-Scanner
         env:
@@ -42,5 +41,87 @@ jobs:
           chmod +x osv-scanner_linux_amd64
           sudo install osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
 
-      - name: Check declared dependencies for vulnerabilities
-        run: osv-scanner scan source --lockfile=third_party/bom.json
+      - name: Scan SBOM for vulnerabilities
+        id: osv
+        shell: bash
+        run: |
+          set +e
+          osv-scanner scan source --format json --lockfile=third_party/bom.json > osv-results.json
+          scan_status=$?
+          set -e
+          if [ "$scan_status" -gt 1 ]; then
+            echo "OSV-Scanner failed with exit code $scan_status" >&2
+            exit "$scan_status"
+          fi
+
+      - name: Create two-column report and CSV
+        if: always() && steps.osv.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import csv
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(Path("osv-results.json").read_text())
+          rows = []
+          seen = set()
+
+          for result in data.get("results", []):
+              source = result.get("source", {}).get("path", "third_party/bom.json")
+              for item in result.get("packages", []):
+                  package = item.get("package", {})
+                  name = package.get("name", "unknown")
+                  version = package.get("version", "unknown")
+                  ecosystem = package.get("ecosystem", "")
+                  dependency = f"{name}@{version}"
+                  if ecosystem:
+                      dependency += f" ({ecosystem})"
+
+                  for vuln in item.get("vulnerabilities", []):
+                      ids = [vuln.get("id", "")]
+                      ids.extend(vuln.get("aliases", []))
+                      ids = list(dict.fromkeys(i for i in ids if i))
+                      key = (name, version, tuple(sorted(ids)), source)
+                      if key in seen:
+                          continue
+                      seen.add(key)
+                      summary = vuln.get("summary") or vuln.get("details", "")
+                      rows.append({
+                          "dependency": dependency,
+                          "vulnerability": ", ".join(ids) + (f" — {summary}" if summary else ""),
+                          "version": version,
+                          "vulnerability_ids": "; ".join(ids),
+                          "summary": summary,
+                          "source": source,
+                      })
+
+          with open("third-party-vulnerabilities.csv", "w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=["dependency", "version", "vulnerability_ids", "summary", "source"])
+              writer.writeheader()
+              for row in rows:
+                  writer.writerow({key: row[key] for key in writer.fieldnames})
+
+          lines = ["## Third-party vulnerability findings", "", "| Dependency | Vulnerabilities |", "| --- | --- |"]
+          if rows:
+              for row in rows:
+                  finding = row["vulnerability"].replace("|", "\\|").replace("\n", " ")
+                  lines.append(f"| {row['dependency']} | {finding} |")
+          else:
+              lines.append("| No vulnerabilities reported | OSV-Scanner found no matching findings in the SBOM. |")
+          lines.extend(["", f"CSV report: `third-party-vulnerabilities.csv` ({len(rows)} finding(s))."])
+
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_file:
+              with open(summary_file, "a", encoding="utf-8") as f:
+                  f.write("\\n".join(lines) + "\\n")
+          print("\\n".join(lines))
+          PY
+
+      - name: Upload vulnerability CSV
+        if: always() && steps.osv.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-party-vulnerability-report
+          path: third-party-vulnerabilities.csv
+          if-no-files-found: warn
