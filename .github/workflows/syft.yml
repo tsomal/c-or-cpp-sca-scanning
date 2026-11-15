@@ -25,7 +25,7 @@ jobs:
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
             | sh -s -- -b /usr/local/bin
-
+      
       - name: Print declared dependency inventory
-      run: |
+        run: |
           jq -r '.components[] | "\(.name) \(.version)"' third_party/bom.json
