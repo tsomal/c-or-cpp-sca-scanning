@@ -32,7 +32,7 @@ jobs:
 
       - name: Install OSV-Scanner
         env:
-        OSV_SCANNER_VERSION: v2.7.1
+          OSV_SCANNER_VERSION: v2.7.1
         run: |
           set -euo pipefail
           base_url="https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}"
