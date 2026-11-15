@@ -27,11 +27,9 @@
     },
     {
       "type": "library",
-      "name": "openssl",
-      "version": "1.1.1n-0+deb11u2",
-      "purl": "pkg:deb/debian/openssl@1.1.1n-0%2Bdeb11u2",
-      "cpe": "cpe:2.3:a:openssl:openssl:1.1.1n:*:*:*:*:*:*:*"
-
+      "name": "OpenSSL",
+      "version": "1.0.2u-1~deb9u1",
+      "purl": "pkg:deb/debian/openssl@1.0.2u-1~deb9u1",
     }
   ]
 }
